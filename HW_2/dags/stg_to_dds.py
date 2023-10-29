@@ -3,9 +3,10 @@ from airflow import DAG
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 
-def editors ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
+
+def editors():
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     INSERT INTO dds.editors (id, username, first_name, last_name, email, isu_number)
     select distinct (json_array_elements(wp_list::json->'editors')::json->>'id')::integer as editor_id, 
         (json_array_elements(wp_list::json->'editors')::json->>'username') as username,
@@ -21,11 +22,13 @@ def editors ():
         last_name = EXCLUDED.last_name, 
         email = EXCLUDED.email, 
         isu_number = EXCLUDED.isu_number;
-    """)
-
-def states ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
     """
+    )
+
+
+def states():
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     INSERT INTO dds.states (cop_state, state_name)
     with t as (select distinct (json_array_elements(wp_in_academic_plan::json)->>'status') as cop_states from stg.work_programs wp)
     select cop_states, 
@@ -40,11 +43,13 @@ def states ():
     SET 
         id = EXCLUDED.id, 
         cop_state = EXCLUDED.cop_state;
-    """)
-
-def units ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
     """
+    )
+
+
+def units():
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     INSERT INTO dds.units (id, unit_title, faculty_id)
     select 
         distinct sw.fak_id, 
@@ -57,15 +62,18 @@ def units ():
     SET 
         unit_title = EXCLUDED.unit_title, 
         faculty_id = EXCLUDED.faculty_id;
-    """)
+    """
+    )
 
-def up ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
+
+def up():
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     truncate dds.up restart identity cascade;
-    """)
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
     """
+    )
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     INSERT INTO dds.up (id, plan_type, direction_id, ns_id, edu_program_id, edu_program_name, unit_id, level_id, university_partner, up_country, lang, military_department, selection_year)
     select ud.id, 
         ud.plan_type, 
@@ -87,15 +95,18 @@ def up ():
     on u.unit_title  = ud.faculty_name 
     left join dds.levels l 
     on ud.training_period = l.training_period 
-    """)
+    """
+    )
 
-def wp ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
+
+def wp():
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     truncate dds.wp restart identity cascade;
-    """)
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
     """
+    )
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     INSERT INTO dds.wp (wp_id, discipline_code, wp_title, wp_status, unit_id, wp_description)
     with wp_desc as (
     select 
@@ -121,26 +132,31 @@ def wp ():
     on wp_desc.discipline_code = wp_unit.discipline_code
     left join dds.states s 
     on wp_desc.wp_status = s.cop_state;
-    """)
+    """
+    )
 
-def wp_inter ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
+
+def wp_inter():
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     truncate dds.wp_editor restart identity cascade;
-    """)
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
     """
+    )
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     truncate dds.wp_up restart identity cascade;
-    """)
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
     """
+    )
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     INSERT INTO dds.wp_editor (wp_id, editor_id)
     select (wp_list::json->>'id')::integer as wp_id,
         (json_array_elements(wp_list::json->'editors')::json->>'id')::integer as editor_id
     from stg.su_wp
-    """)
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
     """
+    )
+    PostgresHook(postgres_conn_id="PG_WAREHOUSE_CONNECTION").run(
+        """
     INSERT INTO dds.wp_up (wp_id, up_id)
     with t as (
     select id,
@@ -150,36 +166,21 @@ def wp_inter ():
     select t.wp_id, (json_array_elements(wp.academic_plan_in_field_of_study::json)->>'ap_isu_id')::integer as up_id from t
     join stg.work_programs wp
     on t.id = wp.id
-    """)
+    """
+    )
 
 
-
-
-
-with DAG(dag_id='stg_to_dds', start_date=pendulum.datetime(2022, 1, 1, tz="UTC"), schedule_interval='0 4 * * *', catchup=False) as dag:
-    t3 = PythonOperator(
-    task_id='editors',
-    python_callable=editors 
-    ) 
-    t4 = PythonOperator(
-    task_id='states',
-    python_callable=states 
-    ) 
-    t5 = PythonOperator(
-    task_id='units',
-    python_callable=units 
-    ) 
-    t6 = PythonOperator(
-    task_id='up',
-    python_callable=up 
-    ) 
-    t7 = PythonOperator(
-    task_id='wp',
-    python_callable=wp 
-    ) 
-    t8 = PythonOperator(
-    task_id='wp_inter',
-    python_callable=wp_inter 
-    ) 
+with DAG(
+    dag_id="stg_to_dds",
+    start_date=pendulum.datetime(2022, 1, 1, tz="UTC"),
+    schedule_interval="0 4 * * *",
+    catchup=False,
+) as dag:
+    t3 = PythonOperator(task_id="editors", python_callable=editors)
+    t4 = PythonOperator(task_id="states", python_callable=states)
+    t5 = PythonOperator(task_id="units", python_callable=units)
+    t6 = PythonOperator(task_id="up", python_callable=up)
+    t7 = PythonOperator(task_id="wp", python_callable=wp)
+    t8 = PythonOperator(task_id="wp_inter", python_callable=wp_inter)
 
 [t3, t4, t5] >> t6 >> t7 >> t8
