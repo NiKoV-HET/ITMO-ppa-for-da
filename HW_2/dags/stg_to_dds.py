@@ -3,33 +3,6 @@ from airflow import DAG
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.operators.python_operator import PythonOperator
 
-def directions ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
-    INSERT INTO dds.directions (direction_id, direction_code, direction_name)
-    select distinct direction_id::integer, direction_code, direction_name from stg.up_description ud 
-    ON CONFLICT ON CONSTRAINT direction_code_uindex DO UPDATE 
-    SET 
-        direction_id = EXCLUDED.direction_id, 
-        direction_name = EXCLUDED.direction_name;
-    """)
-
-def levels ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
-    INSERT INTO dds.levels (training_period, level_name)
-    with t as (select distinct training_period from stg.up_description ud)
-    select training_period, 
-        case when training_period = '2'   then 'магистратура' 
-                when training_period = '4'   then 'бакалавриат'
-                else 'специалитет'
-        end as level_name
-    from t
-    ON CONFLICT ON CONSTRAINT level_name_uindex DO UPDATE 
-    SET 
-        training_period = EXCLUDED.training_period;
-    """)
-
 def editors ():
     PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
     """
@@ -180,58 +153,10 @@ def wp_inter ():
     """)
 
 
-def wp_markup ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
-    insert into dds.wp_markup  (id, title, discipline_code, prerequisites, outcomes, prerequisites_cnt, outcomes_cnt)
-    select *, json_array_length(prerequisites::json), json_array_length(outcomes::json) from stg.wp_markup wm 
-    ON CONFLICT ON CONSTRAINT wp_id_uindex DO UPDATE 
-    SET 
-        title = EXCLUDED.title, 
-        discipline_code = EXCLUDED.discipline_code, 
-        prerequisites = EXCLUDED.prerequisites, 
-
-        outcomes = EXCLUDED.outcomes, 
-        prerequisites_cnt = EXCLUDED.prerequisites_cnt,
-        outcomes_cnt = EXCLUDED.outcomes_cnt;
-    """)
-
-def wp_online_sourse ():
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
-    truncate dds.online_courses restart identity cascade;
-    """)
-    PostgresHook(postgres_conn_id='PG_WAREHOUSE_CONNECTION').run(
-    """
-    insert into dds.online_courses 
-    (id, title, institution , discipline_code)
-    with t as (
-    select 
-    id,
-    title,
-    institution::json->>'title'::text as institution,
-    (((json_array_elements(topic_with_online_course::json)->>'discipline_section')::json)->>'work_program')::json->>'discipline_code' as discipline_code
-    from stg.online_courses oc),
-    t2 as (
-    select *, SUBSTRING(discipline_code, '([0-9]{1,6})')::integer as discipline_code_int from t)
-    select id, title, institution , discipline_code_int
-    from t2
-    group by id, title, institution, discipline_code_int
-    order by 1
-    """)
-
 
 
 
 with DAG(dag_id='stg_to_dds', start_date=pendulum.datetime(2022, 1, 1, tz="UTC"), schedule_interval='0 4 * * *', catchup=False) as dag:
-    t1 = PythonOperator(
-    task_id='directions',
-    python_callable=directions 
-    ) 
-    t2 = PythonOperator(
-    task_id='levels',
-    python_callable=levels 
-    ) 
     t3 = PythonOperator(
     task_id='editors',
     python_callable=editors 
@@ -256,13 +181,5 @@ with DAG(dag_id='stg_to_dds', start_date=pendulum.datetime(2022, 1, 1, tz="UTC")
     task_id='wp_inter',
     python_callable=wp_inter 
     ) 
-    t9 = PythonOperator(
-    task_id='wp_markup',
-    python_callable=wp_markup 
-    ) 
-    t10 = PythonOperator(
-    task_id='wp_online_sourse',
-    python_callable=wp_online_sourse 
-    ) 
 
-[t1, t2, t3, t4, t5] >> t6 >> t7 >> t8 >> [t9, t10]
+[t3, t4, t5] >> t6 >> t7 >> t8
